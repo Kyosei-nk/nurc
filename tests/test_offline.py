@@ -93,7 +93,7 @@ def test_generate() -> None:
 
     print("[インカレ] 生成(1日目)")
     txt = generate(_jara_regatta(), date(2025, 9, 3), cfg)
-    check("男子ダブルスカル　　明日の敗者復活戦へ" in txt, "サマリー行")
+    check("男子ダブルスカル　予選2着（3/25）→ 明日の敗者復活戦へ" in txt, "サマリー行(着順+進出先)")
     check("No.14 9:10 男子ダブルスカル Heat 1組" in txt, "詳細見出し")
     check("4.名古屋大学　1:39.49 7:06.24(3/25)" in txt, "名大の記録行")
 
@@ -101,7 +101,8 @@ def test_generate() -> None:
     txt2 = generate(_jara_regatta(), date(2025, 9, 4), cfg)
     check("2日目の結果" in txt2, "2日目ヘッダ")
     check("Repechage 1組" in txt2, "2日目の敗者復活戦結果")
-    check("男子ダブルスカル　　明日の準々決勝へ" in txt2, "進出クルーのサマリー")
+    check("男子ダブルスカル　敗者復活戦1着（3/25）→ 明日の準々決勝へ" in txt2, "進出クルーのサマリー(着順+進出先)")
+    check("男子クォドルプル　敗者復活戦4着（15/17）（本日終了）" in txt2, "非進出クルーの本日終了表記")
 
 
 def main() -> int:

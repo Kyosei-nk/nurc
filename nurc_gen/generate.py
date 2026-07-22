@@ -310,13 +310,29 @@ def _render_intercollege(regatta: Regatta, target: date, cfg: dict) -> str:
         f"本日、{venue}にて行われました、{name}{day_no}日目の結果をお知らせ致します。\n"
     )
 
-    # サマリー: 各名大クルーの「種目 → 明日の〇〇へ」(翌日出走がある場合)
-    sched_by_team = {}
+    # サマリー: 各名大クルーの「種目　当日ラウンドX着（n/m）→ 明日の◯◯へ / （本日終了）」
+    # 対象日の結果を種目ごとに(同日複数レースなら後のレースで上書き=当日の最終結果)
+    day_by_event: dict[str, tuple[Race, Entry]] = {}
+    for r in result_races:
+        for e in r.nagoya_entries:
+            day_by_event[r.event_code] = (r, e)
+    # 翌日の行き先(種目ごと)
+    next_by_event: dict[str, str] = {}
     for r in sched_races:
         for e in r.nagoya_entries:
-            sched_by_team.setdefault(_event_disp(r), _round_ja(r.round_name))
-    for disp, rja in sched_by_team.items():
-        out.append(f"{disp}　　明日の{rja}へ\n")
+            next_by_event.setdefault(r.event_code, _round_ja(r.round_name))
+    for code, (r, e) in day_by_event.items():
+        rd = _round_ja(r.round_name)
+        if e.rank:
+            res = f"{rd}{e.rank}着"
+        elif e.status:
+            res = f"{rd}{e.status}"
+        else:
+            res = rd
+        nm = f"（{e.overall_rank}/{e.overall_total}）" if e.overall_rank else ""
+        dest = next_by_event.get(code)
+        tail = f"→ 明日の{dest}へ" if dest else "（本日終了）"
+        out.append(f"{r.event_name}　{res}{nm}{tail}\n")
 
     out.append(
         "以下が結果の詳細です。500m 地点、2000m 地点でのタイムを記載しています。\n"
@@ -340,11 +356,6 @@ def _render_intercollege(regatta: Regatta, target: date, cfg: dict) -> str:
 
     out.append(_load_footer("footer_intercollege.txt", cfg))
     return "\n".join(out)
-
-
-def _event_disp(race: Race) -> str:
-    """種目表示(団体名末尾のA/B等は無いので種目名のみ)。"""
-    return race.event_name
 
 
 # ------------------------- 補助 -------------------------
