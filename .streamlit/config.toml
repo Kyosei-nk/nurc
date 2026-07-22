@@ -1,0 +1,7 @@
+# アプリのテーマ（緑×白のシンプル基調）。Streamlit Cloudでも適用される。
+[theme]
+primaryColor = "#006E4F"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F1F6F4"
+textColor = "#1F2A25"
+font = "sans serif"

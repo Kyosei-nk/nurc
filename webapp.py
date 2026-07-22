@@ -24,6 +24,49 @@ from nurc_gen.pipeline import generate_nurc
 
 st.set_page_config(page_title="NURC生成ツール", page_icon="🚣", layout="centered")
 
+# 緑×白のシンプルデザイン + スマホでのタイトル折り返し対策・文字サイズ調整
+_GREEN = "#006E4F"
+st.markdown(
+    f"""
+    <style>
+      /* 全体を少しコンパクトに */
+      html, body, [data-testid="stAppViewContainer"] {{ font-size: 15px; }}
+      .block-container {{ max-width: 720px; padding-top: 2.2rem; }}
+
+      /* タイトル: 緑・小さめ・日本語を不自然な位置で改行しない */
+      h1 {{
+        color: {_GREEN};
+        font-size: 1.55rem !important;
+        line-height: 1.3;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+      }}
+      @media (max-width: 480px) {{
+        h1 {{ font-size: 1.25rem !important; }}
+      }}
+
+      /* 見出し・展開ヘッダを緑に */
+      h2, h3 {{ color: {_GREEN}; }}
+      summary p {{ color: {_GREEN}; font-weight: 600; }}
+
+      /* プライマリボタンを緑基調に(theme primaryColorの補強) */
+      .stButton > button[kind="primary"],
+      .stDownloadButton > button {{
+        background-color: {_GREEN};
+        border-color: {_GREEN};
+        color: #FFFFFF;
+      }}
+      .stButton > button[kind="primary"]:hover,
+      .stDownloadButton > button:hover {{
+        background-color: #005A41;
+        border-color: #005A41;
+        color: #FFFFFF;
+      }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.title("🚣 NURC生成ツール")
 st.caption("大会HPのURLから名古屋大学の結果報告文(NURC)を自動生成します。")
 
