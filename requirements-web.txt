@@ -1,0 +1,2 @@
+# Webアプリ(webapp.py)用。コア(requirements.txt)に追加でインストールする。
+streamlit>=1.36

@@ -1,0 +1,12 @@
+# NURC生成の可変項目。空欄の場合は本文中にプレースホルダ（【…】）が入る。
+# YAMLライブラリ不要の簡易 key: value 形式でパースする。
+
+# 会計担当者（フッターに差し込む）
+accountant_title: 3年
+accountant_kanji: 熊澤志映
+accountant_kana: ナゴヤダイガクソウテイブカイケイクマザワシエ
+accountant_email: shie.3.k.ca@gmail.com
+
+# ライブ配信URL（分かっていれば記入。空なら【配信URLをここに貼付】と出力）
+stream_url_nurc:
+stream_url_official:

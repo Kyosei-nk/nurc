@@ -1,0 +1,12 @@
+# ビルド成果物
+build/
+dist/
+*.spec.bak
+__pycache__/
+*.pyc
+
+# 生成物
+output/*.txt
+
+# 個人情報を含む設定は公開リポジトリに含めない場合はコメント解除
+# config.yaml
