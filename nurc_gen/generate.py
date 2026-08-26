@@ -94,6 +94,18 @@ def _next_race_date(regatta: Regatta, target: date) -> date | None:
     return min(later) if later else None
 
 
+def _next_race_of_crew(regatta: Regatta, target: date,
+                       event_code: str, team: str) -> Race | None:
+    """対象日より後に、そのクルー(種目コード+団体名)が出る最先のレースを返す。
+    翌日とは限らない(1日空けて Final に回る年もある)ため全日程を探索する。"""
+    fut = [
+        r for r in regatta.races
+        if r.date and r.date > target and r.event_code == event_code
+        and any(e.team == team for e in r.entries)
+    ]
+    return min(fut, key=lambda r: (r.date, _race_no_int(r))) if fut else None
+
+
 def _crew_display_kansen(e: Entry, event_code: str) -> str:
     """関西式のクルー表記。個人種目は '団体 （姓）'、団体種目は '団体'。"""
     if event_code in _SCULL_SINGLE and e.surname:
@@ -249,7 +261,22 @@ def _render_kansen(regatta: Regatta, target: date, cfg: dict) -> str:
 # ------------------------- インカレスタイル -------------------------
 
 def _round_ja(round_name: str) -> str:
-    return ROUND_JA.get(round_name.strip(), round_name.strip())
+    """ラウンド英名を日本語に。未登録の 'Final E' 等は 'E決勝' と汎用変換する。"""
+    name = round_name.strip()
+    if name in ROUND_JA:
+        return ROUND_JA[name]
+    m = re.match(r"Final\s+([A-Za-z])$", name)
+    if m:
+        return f"{m.group(1).upper()}決勝"
+    return name
+
+
+def _dest_ja(qualify_raw: str) -> str:
+    """進出先(Qualify列)の英名を日本語に。'→Quarter finals'->'準々決勝'、
+    '→Final E'->'E決勝'。空欄(敗者復活戦行き等)は '' を返す。"""
+    q = (qualify_raw or "").replace("→", "").strip()
+    q = re.sub(r"\d+組\s*$", "", q).strip()
+    return _round_ja(q) if q else ""
 
 
 def _intercollege_label(race: Race) -> str:
@@ -310,18 +337,17 @@ def _render_intercollege(regatta: Regatta, target: date, cfg: dict) -> str:
         f"本日、{venue}にて行われました、{name}{day_no}日目の結果をお知らせ致します。\n"
     )
 
-    # サマリー: 各名大クルーの「種目　当日ラウンドX着（n/m）→ 明日の◯◯へ / （本日終了）」
-    # 対象日の結果を種目ごとに(同日複数レースなら後のレースで上書き=当日の最終結果)
-    day_by_event: dict[str, tuple[Race, Entry]] = {}
-    for r in result_races:
+    # サマリー: 各名大クルーの「種目　当日ラウンドX着（n/m）→ 進出先 / （本日終了）」
+    # 進出先は「そのクルーが次に出るレース(全日程から探索した最先の未来レース)」の
+    # ラウンド名から取る。年ごとに進出規定が変わっても(今年は上位2着→準々決勝、
+    # 以下タイム順で Final E/F/… へ)、ページが実際に組んだ行き先をそのまま反映できる。
+    # 次レースが無ければ本人のQualify列で補い、それも無ければ（本日終了）。
+    # 次レースが翌日でない場合は「明日の」を付けず日付を添える(1日空けてFinalに回る等)。
+    day_by_crew: dict[tuple[str, str], tuple[Race, Entry]] = {}
+    for r in result_races:  # レース番号順。同日複数レースは後のレース=当日の最終結果で上書き
         for e in r.nagoya_entries:
-            day_by_event[r.event_code] = (r, e)
-    # 翌日の行き先(種目ごと)
-    next_by_event: dict[str, str] = {}
-    for r in sched_races:
-        for e in r.nagoya_entries:
-            next_by_event.setdefault(r.event_code, _round_ja(r.round_name))
-    for code, (r, e) in day_by_event.items():
+            day_by_crew[(r.event_code, e.team)] = (r, e)
+    for (code, team), (r, e) in day_by_crew.items():
         rd = _round_ja(r.round_name)
         if e.rank:
             res = f"{rd}{e.rank}着"
@@ -330,8 +356,17 @@ def _render_intercollege(regatta: Regatta, target: date, cfg: dict) -> str:
         else:
             res = rd
         nm = f"（{e.overall_rank}/{e.overall_total}）" if e.overall_rank else ""
-        dest = next_by_event.get(code)
-        tail = f"→ 明日の{dest}へ" if dest else "（本日終了）"
+        nr = _next_race_of_crew(regatta, target, code, team)
+        if nr is not None:
+            dest = _round_ja(nr.round_name)
+            if nr.date == next_date:
+                tail = f"→ 明日の{dest}へ"
+            else:
+                tail = f"→ {dest}へ（{nr.date.month}/{nr.date.day}）"
+        elif _dest_ja(e.qualify_raw):
+            tail = f"→ {_dest_ja(e.qualify_raw)}へ"
+        else:
+            tail = "（本日終了）"
         out.append(f"{r.event_name}　{res}{nm}{tail}\n")
 
     out.append(

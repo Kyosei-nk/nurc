@@ -46,15 +46,25 @@ EVENT_NAMES = {
 # 種目リンクだが結果ページではないもの
 _NON_EVENT = {"tt", "et", "point", "bulletin"}
 
-# ラウンド名(英語) -> 敗者戦/決勝の日本語(サマリー用)
+# ラウンド名(英語) -> 敗者戦/決勝の日本語(サマリー用)。
+# 年によって表記ゆれがある(例: 2025は "Quarter finals"/"Semi-Final"、
+# 2026は "QF"/"Semi F"/"Quarter-Final")。既知の綴りを一通り登録しておく。
+# 未登録の "Final E" 等は generate 側で汎用的に "E決勝" へ変換する。
 ROUND_JA = {
     "Heat": "予選",
     "Repechage": "敗者復活戦",
     "Quarter finals": "準々決勝",
     "Quarterfinals": "準々決勝",
+    "Quarter-Final": "準々決勝",
+    "Quarter Final": "準々決勝",
+    "Quarterfinal": "準々決勝",
+    "QF": "準々決勝",
     "SemiFinal": "準決勝",
     "Semi-Final": "準決勝",
     "Semifinal": "準決勝",
+    "Semi Final": "準決勝",
+    "Semi F": "準決勝",
+    "SF": "準決勝",
     "Final A": "A決勝",
     "Final B": "B決勝",
     "Final C": "C決勝",

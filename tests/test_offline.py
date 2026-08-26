@@ -81,6 +81,29 @@ def test_jara_parse() -> None:
     check(any("除外" in e.status for e in exc), "除外/DNS等の特殊状態を検出")
 
 
+def test_is_nagoya() -> None:
+    print("[共通] 名大判定(混成クルー対応・名工大除外)")
+    from nurc_gen.models import Entry
+    def isn(name: str) -> bool:
+        return Entry(team=name).is_nagoya
+    check(isn("名古屋大学"), "名古屋大学")
+    check(isn("名古屋大学A"), "名古屋大学A")
+    check(isn("名古屋大南山大混成"), "名古屋大南山大混成(混成クルー)")
+    check(not isn("名古屋工業大学"), "名古屋工業大学は除外")
+    check(not isn("市岡 俊祐 (名古屋工業大学)"), "名工大の個人種目表記も除外")
+
+
+def test_intercollege_dest() -> None:
+    print("[インカレ] 進出先の和訳(年ごとの規定変化に対応)")
+    from nurc_gen.generate import _dest_ja
+    check(_dest_ja("→Quarter finals") == "準々決勝", "Quarter finals→準々決勝")
+    check(_dest_ja("→Semi-Final") == "準決勝", "Semi-Final→準決勝")
+    check(_dest_ja("→Final A") == "A決勝", "Final A→A決勝")
+    check(_dest_ja("→Final E") == "E決勝", "Final E→E決勝(今年のタイム順進出)")
+    check(_dest_ja("→Final E 3組") == "E決勝", "組番号付きでもFinal E→E決勝")
+    check(_dest_ja("") == "", "空欄(敗者復活戦行き)は空")
+
+
 def test_generate() -> None:
     cfg = load_config(ROOT / "config.yaml")
     print("[関西] 生成(1日目)")
@@ -106,7 +129,8 @@ def test_generate() -> None:
 
 
 def main() -> int:
-    for fn in (test_karal_parse, test_jara_parse, test_generate):
+    for fn in (test_karal_parse, test_jara_parse, test_is_nagoya,
+               test_intercollege_dest, test_generate):
         fn()
     print()
     if _failures:

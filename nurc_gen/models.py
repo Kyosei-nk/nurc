@@ -60,11 +60,10 @@ class Entry:
 
     @property
     def is_nagoya(self) -> bool:
-        # 「名古屋工業大学」を誤マッチさせない
-        base = self.team_base
-        return base == NAGOYA or self.team.startswith(NAGOYA + "A") or \
-            self.team.startswith(NAGOYA + "B") or self.team.startswith(NAGOYA + "C") \
-            or self.team == NAGOYA
+        # 単独「名古屋大学(A/B/C)」に加え、混成クルー(例「名古屋大南山大混成」)も
+        # 名大を含むものとして対象にする。「名古屋工業大学(名工大)」は '名古屋大' を
+        # 含まないため自然に除外される(名古屋→工業→大学 で '名古屋大' が並ばない)。
+        return "名古屋大" in self.team
 
     @staticmethod
     def _dist(label: str) -> int:
