@@ -69,6 +69,8 @@ st.markdown(
 
 st.title("🚣 NURC生成ツール")
 st.caption("大会HPのURLから名古屋大学の結果報告文(NURC)を自動生成します。")
+# デプロイ反映確認用のビルド目印。新バージョンが反映されると数字が上がる。
+st.caption("build 2026-08-26b（進出先＝実レース／混成クルー対応）")
 
 url = st.text_input(
     "大会結果ページのURL",
