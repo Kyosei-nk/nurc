@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from .models import Entry, Race, Regatta
@@ -279,6 +279,30 @@ def _dest_ja(qualify_raw: str) -> str:
     return _round_ja(q) if q else ""
 
 
+# 詳細欄の進出先(英語表記)を正規化する。ページ上の Qualify 列は 'Semi-Final'、
+# スケジュール側のラウンド名は 'Semi F'/'QF' と表記ゆれがあるため、詳細欄では
+# 両者を同じ英語ラベルに揃える。
+_ROUND_EN = {
+    "QF": "Quarter-Final",
+    "Quarter finals": "Quarter-Final",
+    "Quarterfinals": "Quarter-Final",
+    "Quarter-Final": "Quarter-Final",
+    "Quarter Final": "Quarter-Final",
+    "Quarterfinal": "Quarter-Final",
+    "Semi F": "Semi-Final",
+    "SemiFinal": "Semi-Final",
+    "Semi-Final": "Semi-Final",
+    "Semifinal": "Semi-Final",
+    "Semi Final": "Semi-Final",
+    "SF": "Semi-Final",
+}
+
+
+def _round_en(round_name: str) -> str:
+    name = (round_name or "").strip()
+    return _ROUND_EN.get(name, name)
+
+
 def _intercollege_label(race: Race) -> str:
     """'Heat 1組' / 'Final A' のようなラウンド+組表記(英名は組の前に空白)。"""
     if race.group:
@@ -286,7 +310,7 @@ def _intercollege_label(race: Race) -> str:
     return race.round_name
 
 
-def _intercollege_detail(race: Race) -> str:
+def _intercollege_detail(race: Race, regatta: Regatta, target: date) -> str:
     lines = [f"No.{race.no} {race.time} {race.event_name} {_intercollege_label(race)}".rstrip()]
     for e in sorted(race.entries, key=_bno_int):
         if e.status:
@@ -296,12 +320,19 @@ def _intercollege_detail(race: Race) -> str:
         t_fin = _fmt_time(e.final_time)
         time_str = " ".join(t for t in (t_mid, t_fin) if t)
         nm = f"({e.overall_rank}/{e.overall_total})" if e.overall_rank else ""
-        dest = e.qualify_raw.replace("→", "").strip()
+        dest = _round_en(e.qualify_raw.replace("→", "").strip())
+        # 名大クルーは、ページの Qualify 列に印が無くても実際に次のレースへ
+        # 進む場合がある(今年の女子エイトのように3着でも準決勝進出)。その場合は
+        # 実スケジュールから進出先を補完する。
+        if not dest and e.is_nagoya:
+            nr = _next_race_of_crew(regatta, target, race.event_code, e.team)
+            if nr is not None:
+                dest = _round_en(nr.round_name)
         arrow = ""
         if dest and e.rank:
-            arrow = f" →{e.rank}着　{dest}"
+            arrow = f" →{e.rank}着　{dest}へ"
         elif dest:
-            arrow = f" →{dest}"
+            arrow = f" →{dest}へ"
         lines.append(f"{e.bno}.{e.team}　{time_str}{nm}{arrow}".rstrip())
     return "\n".join(lines)
 
@@ -355,25 +386,26 @@ def _render_intercollege(regatta: Regatta, target: date, cfg: dict) -> str:
             res = f"{rd}{e.status}"
         else:
             res = rd
-        nm = f"（{e.overall_rank}/{e.overall_total}）" if e.overall_rank else ""
         nr = _next_race_of_crew(regatta, target, code, team)
         if nr is not None:
             dest = _round_ja(nr.round_name)
-            if nr.date == next_date:
+            if nr.date == target + timedelta(days=1):
                 tail = f"→ 明日の{dest}へ"
+            elif nr.date == target + timedelta(days=2):
+                tail = f"→ 明後日の{dest}へ"
             else:
                 tail = f"→ {dest}へ（{nr.date.month}/{nr.date.day}）"
         elif _dest_ja(e.qualify_raw):
             tail = f"→ {_dest_ja(e.qualify_raw)}へ"
         else:
             tail = "（本日終了）"
-        out.append(f"{r.event_name}　{res}{nm}{tail}\n")
+        out.append(f"{r.event_name}　{res}{tail}\n")
 
     out.append(
         "以下が結果の詳細です。500m 地点、2000m 地点でのタイムを記載しています。\n"
     )
     for r in result_races:
-        out.append(_intercollege_detail(r))
+        out.append(_intercollege_detail(r, regatta, target))
         out.append("")
 
     if sched_races:

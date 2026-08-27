@@ -104,6 +104,29 @@ def test_intercollege_dest() -> None:
     check(_dest_ja("") == "", "空欄(敗者復活戦行き)は空")
 
 
+def test_intercollege_flexible_progress() -> None:
+    print("[インカレ] 進出先＝実スケジュール(3着でも進出・明後日表記)")
+    from nurc_gen.models import Race, Entry
+    from nurc_gen.generate import _render_intercollege
+    # 予選3着(1,2着以外)だが実際は準決勝へ進むクルー。準決勝は「明後日」開催。
+    heat = Race(no="1", date=date(2026, 8, 27), time="10:00", event_code="w8+",
+                event_name="女子エイト", round_name="Heat", group="1組",
+                entries=[Entry(bno="1", team="立教大学", rank=1, qualify_raw="→Semi-Final",
+                               splits={"2000m": "7:00.00"}),
+                         Entry(bno="2", team="名古屋大学", rank=3,
+                               splits={"2000m": "8:00.00"})])
+    semi = Race(no="20", date=date(2026, 8, 29), time="16:00", event_code="w8+",
+                event_name="女子エイト", round_name="Semi F", group="1組",
+                entries=[Entry(bno="1", team="名古屋大学"),
+                         Entry(bno="2", team="立教大学")])
+    reg = Regatta(name="テスト", venue="戸田", site="jara", races=[heat, semi])
+    assign_overall_ranks(reg)
+    txt = _render_intercollege(reg, date(2026, 8, 27), {})
+    summary = txt.split("以下が結果の詳細")[0]
+    check("女子エイト　予選3着→ 明後日の準決勝へ" in summary, "3着でも準決勝進出・明後日表記")
+    check("2.名古屋大学　8:00.00(2/2) →3着　Semi-Finalへ" in txt, "詳細欄でも3着の進出先を明示")
+
+
 def test_generate() -> None:
     cfg = load_config(ROOT / "config.yaml")
     print("[関西] 生成(1日目)")
@@ -116,21 +139,25 @@ def test_generate() -> None:
 
     print("[インカレ] 生成(1日目)")
     txt = generate(_jara_regatta(), date(2025, 9, 3), cfg)
-    check("男子ダブルスカル　予選2着（3/25）→ 明日の敗者復活戦へ" in txt, "サマリー行(着順+進出先)")
+    # サマリーは着順のみ(総合順位(n/m)は載せない)＋実スケジュールから進出先
+    check("男子ダブルスカル　予選2着→ 明日の敗者復活戦へ" in txt, "サマリー行(着順+進出先/順位なし)")
+    check("（3/25）" not in txt.split("以下が結果の詳細")[0], "サマリーに(n/m)を出さない")
     check("No.14 9:10 男子ダブルスカル Heat 1組" in txt, "詳細見出し")
-    check("4.名古屋大学　1:39.49 7:06.24(3/25)" in txt, "名大の記録行")
+    # 詳細欄は(n/m)を残しつつ、実際の進出先を「→N着 ○○へ」で付す
+    check("4.名古屋大学　1:39.49 7:06.24(3/25) →2着　Repechageへ" in txt, "名大の記録行(進出先付き)")
 
     print("[インカレ] 生成(2日目=速報)")
     txt2 = generate(_jara_regatta(), date(2025, 9, 4), cfg)
     check("2日目の結果" in txt2, "2日目ヘッダ")
     check("Repechage 1組" in txt2, "2日目の敗者復活戦結果")
-    check("男子ダブルスカル　敗者復活戦1着（3/25）→ 明日の準々決勝へ" in txt2, "進出クルーのサマリー(着順+進出先)")
-    check("男子クォドルプル　敗者復活戦4着（15/17）（本日終了）" in txt2, "非進出クルーの本日終了表記")
+    check("男子ダブルスカル　敗者復活戦1着→ 明日の準々決勝へ" in txt2, "進出クルーのサマリー(着順+進出先/順位なし)")
+    check("男子クォドルプル　敗者復活戦4着（本日終了）" in txt2, "非進出クルーの本日終了表記(順位なし)")
 
 
 def main() -> int:
     for fn in (test_karal_parse, test_jara_parse, test_is_nagoya,
-               test_intercollege_dest, test_generate):
+               test_intercollege_dest, test_intercollege_flexible_progress,
+               test_generate):
         fn()
     print()
     if _failures:
