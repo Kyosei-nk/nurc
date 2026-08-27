@@ -104,6 +104,27 @@ def test_intercollege_dest() -> None:
     check(_dest_ja("") == "", "空欄(敗者復活戦行き)は空")
 
 
+def test_intercollege_per_round_rank() -> None:
+    print("[インカレ] (n/m)はその日のラウンドのタイム順位(予選順位を引き継がない)")
+    from nurc_gen.models import Race, Entry
+    # 予選: 名大は3クルー中3位。準々決勝(別日): 名大は2クルー中1位。
+    heat = Race(event_code="m2x", round_name="Heat", group="1組",
+                date=date(2026, 8, 26),
+                entries=[Entry(team="A大", splits={"2000m": "7:00.00"}),
+                         Entry(team="B大", splits={"2000m": "7:10.00"}),
+                         Entry(team="名古屋大学", splits={"2000m": "7:20.00"})])
+    qf = Race(event_code="m2x", round_name="QF", group="1組",
+              date=date(2026, 8, 27),
+              entries=[Entry(team="名古屋大学", splits={"2000m": "7:05.00"}),
+                       Entry(team="C大", splits={"2000m": "7:15.00"})])
+    reg = Regatta(site="jara", races=[heat, qf])
+    assign_overall_ranks(reg)
+    nh = next(e for e in heat.entries if e.is_nagoya)
+    nq = next(e for e in qf.entries if e.is_nagoya)
+    check((nh.overall_rank, nh.overall_total) == (3, 3), f"予選は予選全体で3/3 (実際{nh.overall_rank}/{nh.overall_total})")
+    check((nq.overall_rank, nq.overall_total) == (1, 2), f"準々決勝は準々決勝全体で1/2 (実際{nq.overall_rank}/{nq.overall_total})")
+
+
 def test_intercollege_flexible_progress() -> None:
     print("[インカレ] 進出先＝実スケジュール(3着でも進出・明後日表記)")
     from nurc_gen.models import Race, Entry
@@ -156,8 +177,8 @@ def test_generate() -> None:
 
 def main() -> int:
     for fn in (test_karal_parse, test_jara_parse, test_is_nagoya,
-               test_intercollege_dest, test_intercollege_flexible_progress,
-               test_generate):
+               test_intercollege_dest, test_intercollege_per_round_rank,
+               test_intercollege_flexible_progress, test_generate):
         fn()
     print()
     if _failures:
