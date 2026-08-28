@@ -1,7 +1,7 @@
 """NURC本文の生成。
 
 サイト(karal=関西選手権 / jara=インカレ)ごとに文体が異なるため、共通の
-前処理(対象日の結果抽出・翌日スケジュール抽出・順位付与)を行ったうえで
+前処理(対象日の結果抽出・翌日スケジュール抽出)を行ったうえで
 スタイル別のレンダラに振り分ける。
 """
 
@@ -12,7 +12,6 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from .models import Entry, Race, Regatta
-from .ranking import assign_overall_ranks
 from .resources import bundled_path
 
 _TEMPLATE_DIR = bundled_path("templates")
@@ -173,10 +172,11 @@ def _kansen_detail(race: Race) -> str:
         t_mid = _fmt_time(e.split("1000m"))
         t_fin = _fmt_time(e.final_time)
         time_str = " ".join(t for t in (t_mid, t_fin) if t)
-        nm = f" ({e.overall_rank}/{e.overall_total})" if e.overall_rank else ""
+        # 行頭の番号はレーン番号なので、着順は組内順位として明示する。
+        place = f" {e.rank}着" if e.rank else ""
         dest = _qualify_dest(e.qualify_raw)
         arrow = f"→{dest}" if dest else ""
-        lines.append(f"{e.bno} {crew}　{time_str}{nm}{arrow}".rstrip())
+        lines.append(f"{e.bno} {crew}　{time_str}{place}{arrow}".rstrip())
     return "\n".join(lines)
 
 
@@ -319,7 +319,8 @@ def _intercollege_detail(race: Race, regatta: Regatta, target: date) -> str:
         t_mid = _fmt_time(e.split("500m"))
         t_fin = _fmt_time(e.final_time)
         time_str = " ".join(t for t in (t_mid, t_fin) if t)
-        nm = f"({e.overall_rank}/{e.overall_total})" if e.overall_rank else ""
+        # 行頭の番号はレーン番号なので、着順は組内順位として明示する。
+        place = f" {e.rank}着" if e.rank else ""
         dest = _round_en(e.qualify_raw.replace("→", "").strip())
         # 名大クルーは、ページの Qualify 列に印が無くても実際に次のレースへ
         # 進む場合がある(今年の女子エイトのように3着でも準決勝進出)。その場合は
@@ -328,12 +329,8 @@ def _intercollege_detail(race: Race, regatta: Regatta, target: date) -> str:
             nr = _next_race_of_crew(regatta, target, race.event_code, e.team)
             if nr is not None:
                 dest = _round_en(nr.round_name)
-        arrow = ""
-        if dest and e.rank:
-            arrow = f" →{e.rank}着　{dest}へ"
-        elif dest:
-            arrow = f" →{dest}へ"
-        lines.append(f"{e.bno}.{e.team}　{time_str}{nm}{arrow}".rstrip())
+        arrow = f" →{dest}へ" if dest else ""
+        lines.append(f"{e.bno}.{e.team}　{time_str}{place}{arrow}".rstrip())
     return "\n".join(lines)
 
 
@@ -467,7 +464,6 @@ def _load_footer(filename: str, cfg: dict) -> str:
 # ------------------------- エントリポイント -------------------------
 
 def generate(regatta: Regatta, target: date | None, cfg: dict) -> str:
-    assign_overall_ranks(regatta)
     tgt = _resolve_target_date(regatta, target)
     if tgt is None:
         return "（対象となるレース日が特定できませんでした。ページ構造をご確認ください。）"

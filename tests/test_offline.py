@@ -15,7 +15,6 @@ sys.path.insert(0, str(ROOT))
 
 from nurc_gen.generate import generate, load_config  # noqa: E402
 from nurc_gen.models import Regatta  # noqa: E402
-from nurc_gen.ranking import assign_overall_ranks  # noqa: E402
 from nurc_gen.sites import jara, karal  # noqa: E402
 
 FIX = ROOT / "tests" / "fixtures"
@@ -61,21 +60,19 @@ def test_karal_parse() -> None:
     m1x = [r for r in reg.races if r.event_code == "m1x"]
     koudai = [e for r in m1x for e in r.entries if e.team.startswith("名古屋工業")]
     check(koudai and all(not e.is_nagoya for e in koudai), "名古屋工業大学を名大扱いしない")
-    # 名大M2X予選の総合順位(サンプル一致点)
-    assign_overall_ranks(reg)
+    # 名大M2X予選の着順とタイム(サンプル一致点)
     a = next(e for r in reg.races if r.event_code == "m2x" and "予選" in r.round_name
              for e in r.entries if e.team == "名古屋大学A")
-    check((a.overall_rank, a.overall_total) == (1, 21), f"M2X名大A (n/m)=({a.overall_rank}/{a.overall_total}) 期待(1/21)")
+    check((a.rank, a.final_time) == (1, "7:13.24"), f"M2X名大A 予選1着 7:13.24 (実際{a.rank}着 {a.final_time})")
 
 
 def test_jara_parse() -> None:
     print("[インカレ] パース")
     reg = _jara_regatta()
-    assign_overall_ranks(reg)
     nagoya = next(e for r in reg.races if r.event_code == "m2x" and r.round_name == "Heat"
                   for e in r.entries if e.is_nagoya)
-    check((nagoya.overall_rank, nagoya.overall_total) == (3, 25),
-          f"M2X名大Heat (n/m)=({nagoya.overall_rank}/{nagoya.overall_total}) 期待(3/25)")
+    check((nagoya.bno, nagoya.rank, nagoya.final_time) == ("4", 2, "07:06.24"),
+          f"M2X名大Heat 4レーン2着 07:06.24 (実際{nagoya.bno}レーン{nagoya.rank}着 {nagoya.final_time})")
     # 除外の検出
     exc = [e for r in reg.races for e in r.entries if e.status]
     check(any("除外" in e.status for e in exc), "除外/DNS等の特殊状態を検出")
@@ -104,51 +101,6 @@ def test_intercollege_dest() -> None:
     check(_dest_ja("") == "", "空欄(敗者復活戦行き)は空")
 
 
-def test_intercollege_per_round_rank() -> None:
-    print("[インカレ] (n/m)はその日のラウンドのタイム順位(予選順位を引き継がない)")
-    from nurc_gen.models import Race, Entry
-    # 予選: 名大は3クルー中3位。準々決勝(別日): 名大は2クルー中1位。
-    heat = Race(event_code="m2x", round_name="Heat", group="1組",
-                date=date(2026, 8, 26),
-                entries=[Entry(team="A大", splits={"2000m": "7:00.00"}),
-                         Entry(team="B大", splits={"2000m": "7:10.00"}),
-                         Entry(team="名古屋大学", splits={"2000m": "7:20.00"})])
-    qf = Race(event_code="m2x", round_name="QF", group="1組",
-              date=date(2026, 8, 27),
-              entries=[Entry(team="名古屋大学", splits={"2000m": "7:05.00"}),
-                       Entry(team="C大", splits={"2000m": "7:15.00"})])
-    reg = Regatta(site="jara", races=[heat, qf])
-    assign_overall_ranks(reg)
-    nh = next(e for e in heat.entries if e.is_nagoya)
-    nq = next(e for e in qf.entries if e.is_nagoya)
-    check((nh.overall_rank, nh.overall_total) == (3, 3), f"予選は予選全体で3/3 (実際{nh.overall_rank}/{nh.overall_total})")
-    check((nq.overall_rank, nq.overall_total) == (1, 2), f"準々決勝は準々決勝全体で1/2 (実際{nq.overall_rank}/{nq.overall_total})")
-
-
-def test_no_rank_on_finals() -> None:
-    print("[共通] 決勝ラウンドには(n/m)を付けない(組内着順の焼き直しになるため)")
-    from nurc_gen.models import Race, Entry
-    from nurc_gen.ranking import is_final_round
-    check(is_final_round("Final E") and is_final_round("A決勝") and is_final_round("B決勝"),
-          "Final E / A決勝 / B決勝 は決勝")
-    check(not is_final_round("準決勝") and not is_final_round("準々決勝")
-          and not is_final_round("Semi F") and not is_final_round("CR"),
-          "準決勝・準々決勝・Semi F・CR は決勝ではない")
-    fin = Race(event_code="m4x", round_name="Final E", date=date(2026, 8, 28),
-               entries=[Entry(team="千葉大学", splits={"2000m": "6:49.42"}),
-                        Entry(team="名古屋大学", splits={"2000m": "7:04.14"})])
-    semi = Race(event_code="w8+", round_name="Semi F", group="1組",
-                date=date(2026, 8, 28),
-                entries=[Entry(team="立教大学", splits={"2000m": "7:03.89"}),
-                         Entry(team="名古屋大学", splits={"2000m": "7:54.09"})])
-    reg = Regatta(site="jara", races=[fin, semi])
-    assign_overall_ranks(reg)
-    nf = next(e for e in fin.entries if e.is_nagoya)
-    ns = next(e for e in semi.entries if e.is_nagoya)
-    check(nf.overall_rank is None, f"E決勝は順位なし (実際{nf.overall_rank})")
-    check((ns.overall_rank, ns.overall_total) == (2, 2), "準決勝には従来どおり順位を付ける")
-
-
 def test_intercollege_flexible_progress() -> None:
     print("[インカレ] 進出先＝実スケジュール(3着でも進出・明後日表記)")
     from nurc_gen.models import Race, Entry
@@ -165,11 +117,10 @@ def test_intercollege_flexible_progress() -> None:
                 entries=[Entry(bno="1", team="名古屋大学"),
                          Entry(bno="2", team="立教大学")])
     reg = Regatta(name="テスト", venue="戸田", site="jara", races=[heat, semi])
-    assign_overall_ranks(reg)
     txt = _render_intercollege(reg, date(2026, 8, 27), {})
     summary = txt.split("以下が結果の詳細")[0]
     check("女子エイト　予選3着→ 明後日の準決勝へ" in summary, "3着でも準決勝進出・明後日表記")
-    check("2.名古屋大学　8:00.00(2/2) →3着　Semi-Finalへ" in txt, "詳細欄でも3着の進出先を明示")
+    check("2.名古屋大学　8:00.00 3着 →Semi-Finalへ" in txt, "詳細欄でも3着の進出先を明示")
 
 
 def test_generate() -> None:
@@ -178,18 +129,21 @@ def test_generate() -> None:
     txt = generate(_karal_regatta(), date(2026, 7, 4), cfg)
     check("1日目の結果及び翌日のレーススケジュール" in txt, "ヘッダ文面")
     check("女子シングルスカル(足立)→予選4着、準決勝進出" in txt, "サマリー行")
+    # 詳細欄はタイムの後ろに着順。(n/m)総合順位は出さない
+    check("4 名古屋大学 （足立）　4:37.62 9:12.23 4着→準決勝進出" in txt, "名大の記録行(着順付き)")
+    check("(20/29)" not in txt, "(n/m)を出さない")
     check("【2日目のレーススケジュール】" in txt, "翌日スケジュール見出し")
     check("会計担当 3年 熊澤志映" in txt, "フッター差し込み")
     check("�" not in txt, "文字化けなし")
 
     print("[インカレ] 生成(1日目)")
     txt = generate(_jara_regatta(), date(2025, 9, 3), cfg)
-    # サマリーは着順のみ(総合順位(n/m)は載せない)＋実スケジュールから進出先
-    check("男子ダブルスカル　予選2着→ 明日の敗者復活戦へ" in txt, "サマリー行(着順+進出先/順位なし)")
-    check("（3/25）" not in txt.split("以下が結果の詳細")[0], "サマリーに(n/m)を出さない")
+    # サマリーは着順＋実スケジュールから進出先
+    check("男子ダブルスカル　予選2着→ 明日の敗者復活戦へ" in txt, "サマリー行(着順+進出先)")
     check("No.14 9:10 男子ダブルスカル Heat 1組" in txt, "詳細見出し")
-    # 詳細欄は(n/m)を残しつつ、実際の進出先を「→N着 ○○へ」で付す
-    check("4.名古屋大学　1:39.49 7:06.24(3/25) →2着　Repechageへ" in txt, "名大の記録行(進出先付き)")
+    # 詳細欄はタイムの後ろに着順、進出先は「→○○へ」
+    check("4.名古屋大学　1:39.49 7:06.24 2着 →Repechageへ" in txt, "名大の記録行(着順+進出先)")
+    check("(3/25)" not in txt, "(n/m)を出さない")
 
     print("[インカレ] 生成(2日目=速報)")
     txt2 = generate(_jara_regatta(), date(2025, 9, 4), cfg)
@@ -201,8 +155,7 @@ def test_generate() -> None:
 
 def main() -> int:
     for fn in (test_karal_parse, test_jara_parse, test_is_nagoya,
-               test_intercollege_dest, test_intercollege_per_round_rank,
-               test_no_rank_on_finals, test_intercollege_flexible_progress,
+               test_intercollege_dest, test_intercollege_flexible_progress,
                test_generate):
         fn()
     print()
