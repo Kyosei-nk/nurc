@@ -125,6 +125,30 @@ def test_intercollege_per_round_rank() -> None:
     check((nq.overall_rank, nq.overall_total) == (1, 2), f"準々決勝は準々決勝全体で1/2 (実際{nq.overall_rank}/{nq.overall_total})")
 
 
+def test_no_rank_on_finals() -> None:
+    print("[共通] 決勝ラウンドには(n/m)を付けない(組内着順の焼き直しになるため)")
+    from nurc_gen.models import Race, Entry
+    from nurc_gen.ranking import is_final_round
+    check(is_final_round("Final E") and is_final_round("A決勝") and is_final_round("B決勝"),
+          "Final E / A決勝 / B決勝 は決勝")
+    check(not is_final_round("準決勝") and not is_final_round("準々決勝")
+          and not is_final_round("Semi F") and not is_final_round("CR"),
+          "準決勝・準々決勝・Semi F・CR は決勝ではない")
+    fin = Race(event_code="m4x", round_name="Final E", date=date(2026, 8, 28),
+               entries=[Entry(team="千葉大学", splits={"2000m": "6:49.42"}),
+                        Entry(team="名古屋大学", splits={"2000m": "7:04.14"})])
+    semi = Race(event_code="w8+", round_name="Semi F", group="1組",
+                date=date(2026, 8, 28),
+                entries=[Entry(team="立教大学", splits={"2000m": "7:03.89"}),
+                         Entry(team="名古屋大学", splits={"2000m": "7:54.09"})])
+    reg = Regatta(site="jara", races=[fin, semi])
+    assign_overall_ranks(reg)
+    nf = next(e for e in fin.entries if e.is_nagoya)
+    ns = next(e for e in semi.entries if e.is_nagoya)
+    check(nf.overall_rank is None, f"E決勝は順位なし (実際{nf.overall_rank})")
+    check((ns.overall_rank, ns.overall_total) == (2, 2), "準決勝には従来どおり順位を付ける")
+
+
 def test_intercollege_flexible_progress() -> None:
     print("[インカレ] 進出先＝実スケジュール(3着でも進出・明後日表記)")
     from nurc_gen.models import Race, Entry
@@ -178,7 +202,8 @@ def test_generate() -> None:
 def main() -> int:
     for fn in (test_karal_parse, test_jara_parse, test_is_nagoya,
                test_intercollege_dest, test_intercollege_per_round_rank,
-               test_intercollege_flexible_progress, test_generate):
+               test_no_rank_on_finals, test_intercollege_flexible_progress,
+               test_generate):
         fn()
     print()
     if _failures:
