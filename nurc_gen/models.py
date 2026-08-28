@@ -36,6 +36,8 @@ class Entry:
     rank: Optional[int] = None         # 組内着順
     qualify_raw: str = ""              # 進出情報の生テキスト (例: →準決勝)
     status: str = ""                   # DNS / 除外 / DSQ など特殊状態
+    overall_rank: Optional[int] = None  # (n/m) の n。ranking.py で後付け
+    overall_total: Optional[int] = None  # (n/m) の m。ranking.py で後付け
 
     @property
     def surname(self) -> Optional[str]:

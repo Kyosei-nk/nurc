@@ -1,7 +1,7 @@
 """NURC本文の生成。
 
 サイト(karal=関西選手権 / jara=インカレ)ごとに文体が異なるため、共通の
-前処理(対象日の結果抽出・翌日スケジュール抽出)を行ったうえで
+前処理(対象日の結果抽出・翌日スケジュール抽出・順位付与)を行ったうえで
 スタイル別のレンダラに振り分ける。
 """
 
@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from .models import Entry, Race, Regatta
+from .ranking import assign_overall_ranks
 from .resources import bundled_path
 
 _TEMPLATE_DIR = bundled_path("templates")
@@ -173,10 +174,12 @@ def _kansen_detail(race: Race) -> str:
         t_fin = _fmt_time(e.final_time)
         time_str = " ".join(t for t in (t_mid, t_fin) if t)
         # 行頭の番号はレーン番号なので、着順は組内順位として明示する。
+        # (n/m) はラウンド全体でのタイム順位(決勝には付かない)。
+        nm = f" ({e.overall_rank}/{e.overall_total})" if e.overall_rank else ""
         place = f" {e.rank}着" if e.rank else ""
         dest = _qualify_dest(e.qualify_raw)
         arrow = f"→{dest}" if dest else ""
-        lines.append(f"{e.bno} {crew}　{time_str}{place}{arrow}".rstrip())
+        lines.append(f"{e.bno} {crew}　{time_str}{nm}{place}{arrow}".rstrip())
     return "\n".join(lines)
 
 
@@ -320,6 +323,8 @@ def _intercollege_detail(race: Race, regatta: Regatta, target: date) -> str:
         t_fin = _fmt_time(e.final_time)
         time_str = " ".join(t for t in (t_mid, t_fin) if t)
         # 行頭の番号はレーン番号なので、着順は組内順位として明示する。
+        # (n/m) はラウンド全体でのタイム順位(決勝には付かない)。
+        nm = f"({e.overall_rank}/{e.overall_total})" if e.overall_rank else ""
         place = f" {e.rank}着" if e.rank else ""
         dest = _round_en(e.qualify_raw.replace("→", "").strip())
         # 名大クルーは、ページの Qualify 列に印が無くても実際に次のレースへ
@@ -330,7 +335,7 @@ def _intercollege_detail(race: Race, regatta: Regatta, target: date) -> str:
             if nr is not None:
                 dest = _round_en(nr.round_name)
         arrow = f" →{dest}へ" if dest else ""
-        lines.append(f"{e.bno}.{e.team}　{time_str}{place}{arrow}".rstrip())
+        lines.append(f"{e.bno}.{e.team}　{time_str}{nm}{place}{arrow}".rstrip())
     return "\n".join(lines)
 
 
@@ -464,6 +469,7 @@ def _load_footer(filename: str, cfg: dict) -> str:
 # ------------------------- エントリポイント -------------------------
 
 def generate(regatta: Regatta, target: date | None, cfg: dict) -> str:
+    assign_overall_ranks(regatta)
     tgt = _resolve_target_date(regatta, target)
     if tgt is None:
         return "（対象となるレース日が特定できませんでした。ページ構造をご確認ください。）"
